@@ -824,7 +824,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 		return SR_ERR_ARG;
 
 
-	ret = mhs5200a_set_counter_gate_time(sdi, COUNTER_GATE_TIME_1_SEC);
+	ret = mhs5200a_set_counter_function(sdi, COUNTER_MEASURE_FREQUENCY);
 	if (ret < 0)
 		return SR_ERR;
 	
