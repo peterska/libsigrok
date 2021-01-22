@@ -29,17 +29,24 @@
 
 SR_PRIV int mhs_send_req(struct sr_serial_dev_inst *serial, const char *fmt, ...);
 
-#define LINELEN_MAX 50	/**< Max. line length for requests */
+#define PROTOCOL_LEN_MAX 32	/**< Max. line length for requests */
 
-#define REQ_TIMEOUT_MS 250 /**< Timeout [ms] for single request. */
+#define SERIAL_READ_TIMEOUT_MS 50
+#define SERIAL_WRITE_TIMEOUT_MS 50
+
+// don't change the values, these are returned by the function generator
+enum attenuation_type {
+  ATTENUATION_MINUS_20DB = 0,
+  ATTENUATION_0DB        = 1,
+};
 
 enum waveform_type {
-	WF_DC = 0,
-	WF_SINE,
-	WF_SQUARE,
-	WF_TRIANGLE,
-	WF_RISING_SAWTOOTH,
-	WF_FALLING_SAWTOOTH,
+	WAVEFORM_SINE = 0,
+	WAVEFORM_SQUARE,
+	WAVEFORM_TRIANGLE,
+	WAVEFORM_RISING_SAWTOOTH,
+	WAVEFORM_FALLING_SAWTOOTH,
+	WAVEFORM_ARBITRARY_0 = 100,
 };
 
 enum waveform_options {
@@ -51,7 +58,6 @@ enum waveform_options {
 };
 
 struct waveform_spec {
-	const char *name;
 	enum waveform_type waveform;
 	double freq_min;
 	double freq_max;
@@ -67,9 +73,9 @@ struct channel_spec {
 
 struct dev_context {
 	struct sr_sw_limits limits;
-  
-	uint8_t buf[LINELEN_MAX];
 	size_t buflen;
+	double max_frequency;
+	uint8_t buf[PROTOCOL_LEN_MAX];
 
 };
 

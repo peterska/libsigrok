@@ -23,18 +23,18 @@
 SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type type)
 {
 	switch (type) {
-	case WF_DC:
-		return "DC";
-	case WF_SINE:
+	case WAVEFORM_SINE:
 		return "Sine";
-	case WF_SQUARE:
+	case WAVEFORM_SQUARE:
 		return "Square";
-	case WF_TRIANGLE:
+	case WAVEFORM_TRIANGLE:
 		return "Triangle";
-	case WF_RISING_SAWTOOTH:
+	case WAVEFORM_RISING_SAWTOOTH:
 		return "Rising Sawtooth";
-	case WF_FALLING_SAWTOOTH:
+	case WAVEFORM_FALLING_SAWTOOTH:
 		return "Falling Sawtooth";
+	case WAVEFORM_ARBITRARY_0:
+		return "Arbitrary Waveform 0";
 	}
 
 	return "Unknown";
