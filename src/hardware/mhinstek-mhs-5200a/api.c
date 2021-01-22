@@ -448,6 +448,75 @@ static int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val)
 	return mhs5200a_cmd_ok(sdi->conn, ":s1b%d", val ? 1 : 0);
 }
 
+static int mhs5200a_set_counter_onoff(const struct sr_dev_inst *sdi, long val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s6b%d", val);
+}
+
+SR_PRIV  int mhs5200a_set_counter_function(const struct sr_dev_inst *sdi, enum counter_function val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dm", val);
+}
+
+SR_PRIV int mhs5200a_set_counter_gate_time(const struct sr_dev_inst *sdi, enum gate_time val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s1g%d", val);
+}
+
+SR_PRIV int mhs5200a_get_counter_value(const struct sr_dev_inst *sdi, double *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r0e");
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_frequency(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val /= 10.0;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_period(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val *= 1.0e-9;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_pulse_width(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val *= 1.0e-9;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_duty_cycle(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val /= 10.0;
+	return SR_OK;
+}
+
 
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
 {
@@ -532,6 +601,12 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
 	}
 	
+	/* Create channels for the frequency counter output. */
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "FREQ1");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "PERIOD1");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "DUTY1");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "WIDTH1");
+
 	/* Add found device to result set. */
 	devices = g_slist_append(devices, sdi);
 
@@ -745,10 +820,17 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	struct dev_context *devc;
 	int ret;
 	
-	fprintf(stdout, "%s called\n", __func__);//XXXXXXXXX
 	if (!sdi)
 		return SR_ERR_ARG;
 
+
+	ret = mhs5200a_set_counter_gate_time(sdi, COUNTER_GATE_TIME_1_SEC);
+	if (ret < 0)
+		return SR_ERR;
+	
+	ret = mhs5200a_set_counter_onoff(sdi, 1);
+	if (ret < 0)
+		return SR_ERR;
 	
 	devc = sdi->priv;
 
@@ -763,6 +845,7 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 	if (!sdi)
 		return SR_ERR_ARG;
 
+	mhs5200a_set_counter_onoff(sdi, 0);
 	sr_session_source_remove(sdi->session, -1);
 	std_session_send_df_end(sdi);
 	return SR_OK;
