@@ -22,7 +22,7 @@
 #include <config.h>
 #include "protocol.h"
 
-static struct sr_dev_driver mhinstek_mhs_5200a_driver_info;
+static struct sr_dev_driver mhs5200a_driver_info;
 
 static const uint32_t scanopts[] = {
 	SR_CONF_CONN,
@@ -72,7 +72,7 @@ static const double phase_min_max_step[] = { 0.0, 360.0, 1.0 };
  * @retval SR_OK Msg received; buf and buflen contain result, if any except OK.
  * @retval SR_ERR Error, including timeout.
 */
-static int mhs_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *buflen)
+static int mhs5200a_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *buflen)
 {
 	int retc;
 	
@@ -95,7 +95,7 @@ static int mhs_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *bu
 }
 
 /** Send command to device with va_list. */
-static int mhs_send_va(struct sr_serial_dev_inst *serial, const char *fmt, va_list args)
+static int mhs5200a_send_va(struct sr_serial_dev_inst *serial, const char *fmt, va_list args)
 {
 	int retc;
 	char auxfmt[PROTOCOL_LEN_MAX];
@@ -112,7 +112,7 @@ static int mhs_send_va(struct sr_serial_dev_inst *serial, const char *fmt, va_li
 }
 
 /** Send command and consume simple OK reply. */
-static int mhs_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
+static int mhs5200a_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
 {
 	int retc;
 	va_list args;
@@ -122,7 +122,7 @@ static int mhs_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
 
 	/* Send command */
 	va_start(args, fmt);
-	retc = mhs_send_va(serial, fmt, args);
+	retc = mhs5200a_send_va(serial, fmt, args);
 	va_end(args);
 
 	if (retc != SR_OK)
@@ -132,7 +132,7 @@ static int mhs_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
 	buf[0] = '\0';
 	bufptr = buf;
 	buflen = sizeof(buf);
-	retc = mhs_read_reply(serial, &bufptr, &buflen);
+	retc = mhs5200a_read_reply(serial, &bufptr, &buflen);
 	if ((retc == SR_OK) && (buflen == 0))
 		return SR_OK;
 
@@ -143,7 +143,7 @@ static int mhs_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
  * Send command and read reply string.
  * @param reply Pointer to buffer of size PROTOCOL_LEN_MAX. Will be NUL-terminated.
  */
-static int mhs_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...)
+static int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...)
 {
 	int retc;
 	va_list args;
@@ -155,7 +155,7 @@ static int mhs_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const c
 
 	/* Send command */
 	va_start(args, fmt);
-	retc = mhs_send_va(serial, fmt, args);
+	retc = mhs5200a_send_va(serial, fmt, args);
 	va_end(args);
 
 	if (retc != SR_OK)
@@ -165,7 +165,7 @@ static int mhs_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const c
 	buf[0] = '\0';
 	bufptr = buf;
 	buflen = sizeof(buf);
-	retc = mhs_read_reply(serial, &bufptr, &buflen);
+	retc = mhs5200a_read_reply(serial, &bufptr, &buflen);
 	if ((retc == SR_OK) && (buflen > 0)) {
 		strcpy(reply, buf);
 		return SR_OK;
@@ -174,12 +174,12 @@ static int mhs_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const c
 	return SR_ERR;
 }
 
-static int mhs_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val)
+static int mhs5200a_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%dw", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dw", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -192,12 +192,12 @@ static int mhs_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val)
 	return SR_OK;
 }
 
-static int mhs_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val)
+static int mhs5200a_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%dy", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dy", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -210,12 +210,12 @@ static int mhs_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val)
 	return SR_OK;
 }
 
-static int mhs_get_onoff(const struct sr_dev_inst *sdi, long *val)
+static int mhs5200a_get_onoff(const struct sr_dev_inst *sdi, long *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r1b");
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r1b");
 	if (retc < 0)
 		return SR_ERR;
 
@@ -228,12 +228,12 @@ static int mhs_get_onoff(const struct sr_dev_inst *sdi, long *val)
 	return SR_OK;
 }
 
-static int mhs_get_frequency(const struct sr_dev_inst *sdi, int ch, double *val)
+static int mhs5200a_get_frequency(const struct sr_dev_inst *sdi, int ch, double *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%df", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%df", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -247,17 +247,17 @@ static int mhs_get_frequency(const struct sr_dev_inst *sdi, int ch, double *val)
 	return SR_OK;
 }
 
-static int mhs_get_amplitude(const struct sr_dev_inst *sdi, int ch, double *val)
+static int mhs5200a_get_amplitude(const struct sr_dev_inst *sdi, int ch, double *val)
 {
 	int retc;
 	long attenuation;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_get_attenuation(sdi, ch, &attenuation);
+	retc = mhs5200a_get_attenuation(sdi, ch, &attenuation);
 	if (retc < 0)
 		return SR_ERR;
 	
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%da", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%da", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -274,12 +274,12 @@ static int mhs_get_amplitude(const struct sr_dev_inst *sdi, int ch, double *val)
 	return SR_OK;
 }
 
-static int mhs_get_duty_cycle(const struct sr_dev_inst *sdi, int ch, double *val)
+static int mhs5200a_get_duty_cycle(const struct sr_dev_inst *sdi, int ch, double *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%dd", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dd", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -293,17 +293,17 @@ static int mhs_get_duty_cycle(const struct sr_dev_inst *sdi, int ch, double *val
 	return SR_OK;
 }
 
-static int mhs_get_offset(const struct sr_dev_inst *sdi, int ch, double *val)
+static int mhs5200a_get_offset(const struct sr_dev_inst *sdi, int ch, double *val)
 {
 	int retc;
 	double amplitude;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_get_amplitude(sdi, ch, &amplitude);
+	retc = mhs5200a_get_amplitude(sdi, ch, &amplitude);
 	if (retc < 0)
 		return SR_ERR;
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%do", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%do", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -318,12 +318,12 @@ static int mhs_get_offset(const struct sr_dev_inst *sdi, int ch, double *val)
 	return SR_OK;
 }
 
-static int mhs_get_phase(const struct sr_dev_inst *sdi, int ch, double *val)
+static int mhs5200a_get_phase(const struct sr_dev_inst *sdi, int ch, double *val)
 {
 	int retc;
 	char buf[PROTOCOL_LEN_MAX];
 
-	retc = mhs_cmd_reply(buf, sdi->conn, ":r%dp", ch);
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dp", ch);
 	if (retc < 0)
 		return SR_ERR;
 
@@ -336,14 +336,14 @@ static int mhs_get_phase(const struct sr_dev_inst *sdi, int ch, double *val)
 	return SR_OK;
 }
 
-static int mhs_set_frequency(const struct sr_dev_inst *sdi, int ch, double val)
+static int mhs5200a_set_frequency(const struct sr_dev_inst *sdi, int ch, double val)
 {
 	const struct waveform_spec *wspec;
 	struct dev_context *devc;
 	long wtype;
 	unsigned int i;
 	
-	if (mhs_get_waveform(sdi, ch, &wtype) < 0) {
+	if (mhs5200a_get_waveform(sdi, ch, &wtype) < 0) {
 		return SR_ERR;
 	}
 	devc = sdi->priv;
@@ -361,31 +361,31 @@ static int mhs_set_frequency(const struct sr_dev_inst *sdi, int ch, double val)
 	
 	if (val > devc->max_frequency || val < wspec->freq_min || val > wspec->freq_max) {
 		sr_err("Invalid frequency %.2fHz for %s wave. Valid values are between %.2fHZ and %.2fHz",
-		       val, mhinstek_mhs_5200a_waveform_to_string(wtype),
+		       val, mhs5200a_waveform_to_string(wtype),
 		       wspec->freq_min, wspec->freq_max);
 		return SR_ERR;
 	}
-	return mhs_cmd_ok(sdi->conn, ":s%df%d", ch, (int)(val * 100.0 + 0.5));
+	return mhs5200a_cmd_ok(sdi->conn, ":s%df%d", ch, (int)(val * 100.0 + 0.5));
 }
 
-static int mhs_set_waveform(const struct sr_dev_inst *sdi, int ch, long val)
+static int mhs5200a_set_waveform(const struct sr_dev_inst *sdi, int ch, long val)
 {
-	return mhs_cmd_ok(sdi->conn, ":s%dw%d", ch, val);
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dw%d", ch, val);
 }
 
-static int mhs_set_waveform_string(const struct sr_dev_inst *sdi, int ch, const char *val)
+static int mhs5200a_set_waveform_string(const struct sr_dev_inst *sdi, int ch, const char *val)
 {
 	enum waveform_type wtype;
 	
-	wtype = mhinstek_mhs_5200a_string_to_waveform(val);
+	wtype = mhs5200a_string_to_waveform(val);
 	if (wtype == WAVEFORM_UNKNOWN) {
 		sr_err("Unknown waveform %s", val);
 		return SR_ERR;
 	}
-	return mhs_set_waveform(sdi, ch, wtype);
+	return mhs5200a_set_waveform(sdi, ch, wtype);
 }
 
-static int mhs_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
+static int mhs5200a_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
 {
 	long attenuation;
 
@@ -393,7 +393,7 @@ static int mhs_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
 		sr_err("Invalid amplitude %.2fV. Supported values are between 0V and 20V", val);
 		return SR_ERR;
 	}
-	if (mhs_get_attenuation(sdi, ch, &attenuation) < 0)
+	if (mhs5200a_get_attenuation(sdi, ch, &attenuation) < 0)
 		return SR_ERR;
 	
 	if (attenuation == ATTENUATION_MINUS_20DB) {
@@ -401,23 +401,23 @@ static int mhs_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
 	}  else {
 		val *= 100.0;
 	}
-	return mhs_cmd_ok(sdi->conn, ":s%da%d", ch, (int)(val + 0.5));
+	return mhs5200a_cmd_ok(sdi->conn, ":s%da%d", ch, (int)(val + 0.5));
 }
 
-static int mhs_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val)
+static int mhs5200a_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val)
 {
 	if (val < 0.0 || val > 100.0) {
 		sr_err("Invalid duty cycle %.2f%%. Supported values are between 0%% and 100%%", val);
 		return SR_ERR;
 	}
-	return mhs_cmd_ok(sdi->conn, ":s%dd%d", ch, (int)(val * 10.0 + 0.5));
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dd%d", ch, (int)(val * 10.0 + 0.5));
 }
 
-static int mhs_set_offset(const struct sr_dev_inst *sdi, int ch, double val)
+static int mhs5200a_set_offset(const struct sr_dev_inst *sdi, int ch, double val)
 {
 	double amplitude;
 
-	if (mhs_get_amplitude(sdi, ch, &amplitude) < 0)
+	if (mhs5200a_get_amplitude(sdi, ch, &amplitude) < 0)
 		return SR_ERR;
 	// offset is set as a percentage and encoded with an offset of 120 for a range of -120 to 120
 	val = val / amplitude * 100.0;
@@ -425,27 +425,27 @@ static int mhs_set_offset(const struct sr_dev_inst *sdi, int ch, double val)
 		sr_err("Invalid offset %.2f%%. Supported values are between -120%% and 120%% of the amplitude value", val);
 		return SR_ERR;
 	}
-	return mhs_cmd_ok(sdi->conn, ":s%do%d", ch, (int)(val + 0.5 + 120.0));
+	return mhs5200a_cmd_ok(sdi->conn, ":s%do%d", ch, (int)(val + 0.5 + 120.0));
 }
 
-static int mhs_set_phase(const struct sr_dev_inst *sdi, int ch, double val)
+static int mhs5200a_set_phase(const struct sr_dev_inst *sdi, int ch, double val)
 {
 	while (val >= 360.0)
 		val -= 360.0;
 	while (val < 0.0)
 		val += 360.0;
 			
-	return mhs_cmd_ok(sdi->conn, ":s%dp%d", ch, (int)(val + 0.5));
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dp%d", ch, (int)(val + 0.5));
 }
 
-/*static int mhs_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
+/*static int mhs5200a_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
 {
-	return mhs_cmd_ok(sdi->conn, ":s%dy%d", ch, val);
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dy%d", ch, val);
 	}*/
 
-static int mhs_set_onoff(const struct sr_dev_inst *sdi, long val)
+static int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val)
 {
-	return mhs_cmd_ok(sdi->conn, ":s1b%d", val ? 1 : 0);
+	return mhs5200a_cmd_ok(sdi->conn, ":s1b%d", val ? 1 : 0);
 }
 
 
@@ -488,7 +488,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sr_info("Probing serial port %s.", conn);
 
 	/* Query and verify model string. */
-	if ( (mhs_cmd_reply(buf, serial, ":r0c") != SR_OK) || strlen(buf) < 10) {
+	if ( (mhs5200a_cmd_reply(buf, serial, ":r0c") != SR_OK) || strlen(buf) < 10) {
 		serial_close(serial);
 		return NULL;
 	}
@@ -508,7 +508,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sdi->model = g_strdup(model);
 	//sdi->version = g_strdup("5.04");
 	//sdi->serial_num = g_strdup("1234");
-	sdi->driver = &mhinstek_mhs_5200a_driver_info;
+	sdi->driver = &mhs5200a_driver_info;
 
 	
 	devc = g_malloc0(sizeof(*devc));
@@ -574,33 +574,33 @@ static int config_get(uint32_t key, GVariant **data,
 
 		switch (key) {
 		case SR_CONF_ENABLED:
-			if ((ret = mhs_get_onoff(sdi, &vall)) == SR_OK) {
+			if ((ret = mhs5200a_get_onoff(sdi, &vall)) == SR_OK) {
 				*data = g_variant_new_boolean(vall);
 			}
 			break;
 		case SR_CONF_PATTERN_MODE:
-			if ((ret = mhs_get_waveform(sdi, ch->index + 1, &vall)) == SR_OK) {
-				*data = g_variant_new_string(mhinstek_mhs_5200a_waveform_to_string(vall));
+			if ((ret = mhs5200a_get_waveform(sdi, ch->index + 1, &vall)) == SR_OK) {
+				*data = g_variant_new_string(mhs5200a_waveform_to_string(vall));
 			}
 			break;
 		case SR_CONF_OUTPUT_FREQUENCY:
-			if ((ret = mhs_get_frequency(sdi, ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs5200a_get_frequency(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_AMPLITUDE:
-			if ((ret = mhs_get_amplitude(sdi, ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs5200a_get_amplitude(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_OFFSET:
-			if ((ret = mhs_get_offset(sdi, ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs5200a_get_offset(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_PHASE:
-			if ((ret = mhs_get_phase(sdi, ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs5200a_get_phase(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_DUTY_CYCLE:
-			if ((ret = mhs_get_duty_cycle(sdi, ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs5200a_get_duty_cycle(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		default:
@@ -646,25 +646,25 @@ static int config_set(uint32_t key, GVariant *data,
 
 		switch (key) {
 		case SR_CONF_ENABLED:
-			ret = mhs_set_onoff(sdi, g_variant_get_boolean(data));
+			ret = mhs5200a_set_onoff(sdi, g_variant_get_boolean(data));
 			break;
 		case SR_CONF_PATTERN_MODE:
-			ret = mhs_set_waveform_string(sdi, ch->index + 1, g_variant_get_string(data, NULL));
+			ret = mhs5200a_set_waveform_string(sdi, ch->index + 1, g_variant_get_string(data, NULL));
 			break;
 		case SR_CONF_OUTPUT_FREQUENCY:
-			ret = mhs_set_frequency(sdi, ch->index + 1, g_variant_get_double(data));
+			ret = mhs5200a_set_frequency(sdi, ch->index + 1, g_variant_get_double(data));
 			break;
 		case SR_CONF_AMPLITUDE:
-			ret = mhs_set_amplitude(sdi, ch->index + 1, g_variant_get_double(data));
+			ret = mhs5200a_set_amplitude(sdi, ch->index + 1, g_variant_get_double(data));
 			break;
 		case SR_CONF_OFFSET:
-			ret = mhs_set_offset(sdi, ch->index + 1, g_variant_get_double(data));
+			ret = mhs5200a_set_offset(sdi, ch->index + 1, g_variant_get_double(data));
 			break;
 		case SR_CONF_PHASE:
-			ret = mhs_set_phase(sdi, ch->index + 1, g_variant_get_double(data));
+			ret = mhs5200a_set_phase(sdi, ch->index + 1, g_variant_get_double(data));
 			break;
 		case SR_CONF_DUTY_CYCLE:
-			ret = mhs_set_duty_cycle(sdi, ch->index + 1, g_variant_get_double(data));
+			ret = mhs5200a_set_duty_cycle(sdi, ch->index + 1, g_variant_get_double(data));
 			break;
 		default:
 			sr_dbg("%s: Unsupported (cg) key: %d (%s)", __func__,
@@ -687,7 +687,11 @@ static int config_list(uint32_t key, GVariant **data,
 	unsigned int i;
 	double fspec[3];
 
-	devc = sdi->priv;
+	if (sdi) {
+		devc = sdi->priv;
+	} else {
+		devc = NULL;
+	}
 	
 	if (!cg) {
 		switch (key) {
@@ -711,12 +715,15 @@ static int config_list(uint32_t key, GVariant **data,
 			b = g_variant_builder_new(G_VARIANT_TYPE("as"));
 			for (i = 0; i < ch_spec->num_waveforms; i++) {
 				g_variant_builder_add(b, "s",
-						      mhinstek_mhs_5200a_waveform_to_string(ch_spec->waveforms[i].waveform));
+						      mhs5200a_waveform_to_string(ch_spec->waveforms[i].waveform));
 			}
 			*data = g_variant_new("as", b);
 			g_variant_builder_unref(b);
 			break;
 		case SR_CONF_OUTPUT_FREQUENCY:
+			if (!devc) {
+				return SR_ERR;
+			}
 			fspec[0] = 0.1;
 			fspec[1] = devc->max_frequency;
 			fspec[2] = 0.1;
@@ -735,25 +742,34 @@ static int config_list(uint32_t key, GVariant **data,
 
 static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 {
-	/* TODO: configure hardware, reset acquisition state, set up
-	 * callbacks and send header packet. */
+	struct dev_context *devc;
+	int ret;
+	
+	fprintf(stdout, "%s called\n", __func__);//XXXXXXXXX
+	if (!sdi)
+		return SR_ERR_ARG;
 
-	(void)sdi;
+	
+	devc = sdi->priv;
 
-	return SR_OK;
+	sr_sw_limits_acquisition_start(&devc->limits);
+	ret = std_session_send_df_header(sdi);
+	sr_session_source_add(sdi->session, -1, 0, 1000, mhs5200a_receive_data, (void *)sdi);
+	return ret;
 }
 
 static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 {
-	/* TODO: stop acquisition. */
+	if (!sdi)
+		return SR_ERR_ARG;
 
-	(void)sdi;
-
+	sr_session_source_remove(sdi->session, -1);
+	std_session_send_df_end(sdi);
 	return SR_OK;
 }
 
-static struct sr_dev_driver mhinstek_mhs_5200a_driver_info = {
-	.name = "mhinstek-mhs-5200a",
+static struct sr_dev_driver mhs5200a_driver_info = {
+	.name = "mhs-5200a",
 	.longname = "MHINSTEK MHS-5200A",
 	.api_version = 1,
 	.init = std_init,
@@ -770,7 +786,7 @@ static struct sr_dev_driver mhinstek_mhs_5200a_driver_info = {
 	.dev_acquisition_stop = dev_acquisition_stop,
 	.context = NULL,
 };
-SR_REGISTER_DEV_DRIVER(mhinstek_mhs_5200a_driver_info);
+SR_REGISTER_DEV_DRIVER(mhs5200a_driver_info);
 
 /* Local Variables: */
 /* mode: c */

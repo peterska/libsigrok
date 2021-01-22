@@ -20,7 +20,7 @@
 #include <config.h>
 #include "protocol.h"
 
-SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type wtype)
+SR_PRIV const char *mhs5200a_waveform_to_string(enum waveform_type wtype)
 {
 	switch (wtype) {
 	case WAVEFORM_SINE:
@@ -41,7 +41,7 @@ SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type wty
 	return "unknown";
 }
 
-SR_PRIV enum waveform_type mhinstek_mhs_5200a_string_to_waveform(const char *wtype)
+SR_PRIV enum waveform_type mhs5200a_string_to_waveform(const char *wtype)
 {
 	if (!wtype)
 		return WAVEFORM_UNKNOWN;
@@ -61,11 +61,12 @@ SR_PRIV enum waveform_type mhinstek_mhs_5200a_string_to_waveform(const char *wty
 	}
 }
 
-SR_PRIV int mhinstek_mhs_5200a_receive_data(int fd, int revents, void *cb_data)
+SR_PRIV int mhs5200a_receive_data(int fd, int revents, void *cb_data)
 {
 	const struct sr_dev_inst *sdi;
 	struct dev_context *devc;
 
+	fprintf(stdout, "%s called events = %d\n", __func__, revents);//XXXXXXXXX
 	(void)fd;
 
 	if (!(sdi = cb_data))

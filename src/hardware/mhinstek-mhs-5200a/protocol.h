@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LIBSIGROK_HARDWARE_MHINSTEK_MHS_5200A_PROTOCOL_H
-#define LIBSIGROK_HARDWARE_MHINSTEK_MHS_5200A_PROTOCOL_H
+#ifndef LIBSIGROK_HARDWARE_MHINSTEK_MHS5200A_PROTOCOL_H
+#define LIBSIGROK_HARDWARE_MHINSTEK_MHS5200A_PROTOCOL_H
 
 #include <stdint.h>
 #include <glib.h>
@@ -79,9 +79,9 @@ struct dev_context {
 
 };
 
-SR_PRIV int mhinstek_mhs_5200a_receive_data(int fd, int revents, void *cb_data);
-SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type type);
-SR_PRIV enum waveform_type mhinstek_mhs_5200a_string_to_waveform(const char *type);
+SR_PRIV int mhs5200a_receive_data(int fd, int revents, void *cb_data);
+SR_PRIV const char *mhs5200a_waveform_to_string(enum waveform_type type);
+SR_PRIV enum waveform_type mhs5200a_string_to_waveform(const char *type);
 
 #endif
 
