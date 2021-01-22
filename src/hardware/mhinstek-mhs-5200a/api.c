@@ -22,7 +22,7 @@
 #include <config.h>
 #include "protocol.h"
 
-static struct sr_dev_driver mhs5200a_driver_info;
+static struct sr_dev_driver mhinstek_mhs5200a_driver_info;
 
 static const uint32_t scanopts[] = {
 	SR_CONF_CONN,
@@ -577,7 +577,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sdi->model = g_strdup(model);
 	//sdi->version = g_strdup("5.04");
 	//sdi->serial_num = g_strdup("1234");
-	sdi->driver = &mhs5200a_driver_info;
+	sdi->driver = &mhinstek_mhs5200a_driver_info;
 
 	
 	devc = g_malloc0(sizeof(*devc));
@@ -851,8 +851,8 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
-static struct sr_dev_driver mhs5200a_driver_info = {
-	.name = "mhs-5200a",
+static struct sr_dev_driver mhinstek_mhs5200a_driver_info = {
+	.name = "mhinstek-mhs-5200a",
 	.longname = "MHINSTEK MHS-5200A",
 	.api_version = 1,
 	.init = std_init,
@@ -869,7 +869,7 @@ static struct sr_dev_driver mhs5200a_driver_info = {
 	.dev_acquisition_stop = dev_acquisition_stop,
 	.context = NULL,
 };
-SR_REGISTER_DEV_DRIVER(mhs5200a_driver_info);
+SR_REGISTER_DEV_DRIVER(mhinstek_mhs5200a_driver_info);
 
 /* Local Variables: */
 /* mode: c */
