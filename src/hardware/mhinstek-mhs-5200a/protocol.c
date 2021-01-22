@@ -20,24 +20,45 @@
 #include <config.h>
 #include "protocol.h"
 
-SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type type)
+SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type wtype)
 {
-	switch (type) {
+	switch (wtype) {
 	case WAVEFORM_SINE:
-		return "Sine";
+		return "sine";
 	case WAVEFORM_SQUARE:
-		return "Square";
+		return "square";
 	case WAVEFORM_TRIANGLE:
-		return "Triangle";
+		return "triangle";
 	case WAVEFORM_RISING_SAWTOOTH:
-		return "Rising Sawtooth";
+		return "rising sawtooth";
 	case WAVEFORM_FALLING_SAWTOOTH:
-		return "Falling Sawtooth";
+		return "falling sawtooth";
 	case WAVEFORM_ARBITRARY_0:
-		return "Arbitrary Waveform 0";
+		return "arbitrary waveform 0";
+	case WAVEFORM_UNKNOWN:
+		return "unknown";
 	}
+	return "unknown";
+}
 
-	return "Unknown";
+SR_PRIV enum waveform_type mhinstek_mhs_5200a_string_to_waveform(const char *wtype)
+{
+	if (!wtype)
+		return WAVEFORM_UNKNOWN;
+		
+	if (g_ascii_strcasecmp(wtype, "sine") == 0) {
+		return WAVEFORM_SINE;
+	} else if (g_ascii_strcasecmp(wtype, "square") == 0) {
+		return WAVEFORM_SQUARE;
+	} else if (g_ascii_strcasecmp(wtype, "triangle") == 0) {
+		return WAVEFORM_TRIANGLE;
+	} else if (g_ascii_strcasecmp(wtype, "rising sawtooth") == 0) {
+		return WAVEFORM_RISING_SAWTOOTH;
+	} else if (g_ascii_strcasecmp(wtype, "falling sawtooth") == 0) {
+		return WAVEFORM_FALLING_SAWTOOTH;
+	} else {
+		return WAVEFORM_UNKNOWN;
+	}
 }
 
 SR_PRIV int mhinstek_mhs_5200a_receive_data(int fd, int revents, void *cb_data)
@@ -45,7 +66,6 @@ SR_PRIV int mhinstek_mhs_5200a_receive_data(int fd, int revents, void *cb_data)
 	const struct sr_dev_inst *sdi;
 	struct dev_context *devc;
 
-	fprintf(stderr, "%s: called\n", __func__);//XXXXXXXXXX
 	(void)fd;
 
 	if (!(sdi = cb_data))

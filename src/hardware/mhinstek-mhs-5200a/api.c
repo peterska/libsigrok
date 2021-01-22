@@ -51,11 +51,11 @@ static const uint32_t mhs5200a_devopts_cg[] = {
 #define WAVEFORM_DEFAULT WFO_FREQUENCY | WFO_AMPLITUDE | WFO_OFFSET | WFO_PHASE
 
 static const struct waveform_spec mhs5200a_waveforms[] = {
-	{ WAVEFORM_SINE,     1.0E-6,  25.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
-	{ WAVEFORM_SQUARE,   1.0E-6,  10.0E+6, 1.0E-6, WAVEFORM_DEFAULT | WFO_DUTY_CYCLE },
-	{ WAVEFORM_TRIANGLE,   1.0E-6,  10.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
-	{ WAVEFORM_RISING_SAWTOOTH,   1.0E-6,  10.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
-	{ WAVEFORM_FALLING_SAWTOOTH,   1.0E-6,  10.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
+	{ WAVEFORM_SINE,             1.0E-6,  21.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
+	{ WAVEFORM_SQUARE,           1.0E-6,   6.0E+6, 1.0E-6, WAVEFORM_DEFAULT | WFO_DUTY_CYCLE },
+	{ WAVEFORM_TRIANGLE,         1.0E-6,   6.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
+	{ WAVEFORM_RISING_SAWTOOTH,  1.0E-6,   6.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
+	{ WAVEFORM_FALLING_SAWTOOTH, 1.0E-6,   6.0E+6, 1.0E-6, WAVEFORM_DEFAULT },
 };
 
 static const struct channel_spec mhs5200a_channels[] = {
@@ -78,9 +78,6 @@ static int mhs_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *bu
 	
 	*buf[0] = '\0';
 
-	/* Read one line. It is either a data message or "OK". */
-	/*if (serial_readline(serial, buf, buflen, SERIAL_READ_TIMEOUT_MS) != SR_OK)
-	  return SR_ERR;*/
 	retc = serial_read_blocking(serial, *buf, *buflen, SERIAL_READ_TIMEOUT_MS);
 	if (retc <= 0)
 		return SR_ERR;
@@ -89,7 +86,6 @@ static int mhs_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *bu
 		--retc;
 	}
 	*buflen = retc;
-	//fprintf(stdout, "\nserial read [%s]\n", *buf);//XXXXXXXXXXXXXXx
 	if (!strcmp(*buf, "ok")) { /* We got an OK! */
 		*buf[0] = '\0';
 		*buflen = 0;
@@ -108,9 +104,6 @@ static int mhs_send_va(struct sr_serial_dev_inst *serial, const char *fmt, va_li
 	snprintf(auxfmt, sizeof(auxfmt), "%s\n", fmt); // all command require a \n at the end
 	vsnprintf(buf, sizeof(buf), auxfmt, args);
 
-	sr_spew("mhs_send_va: \"%s\"", buf);
-
-	//fprintf(stdout, "\nserial write [%s]\n", buf);//XXXXXXXXXXXXXXx
 	retc = serial_write_blocking(serial, buf, strlen(buf), SERIAL_WRITE_TIMEOUT_MS);
 	if (retc < 0)
 		return SR_ERR;
@@ -343,6 +336,119 @@ static int mhs_get_phase(const struct sr_dev_inst *sdi, int ch, double *val)
 	return SR_OK;
 }
 
+static int mhs_set_frequency(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	const struct waveform_spec *wspec;
+	struct dev_context *devc;
+	long wtype;
+	unsigned int i;
+	
+	if (mhs_get_waveform(sdi, ch, &wtype) < 0) {
+		return SR_ERR;
+	}
+	devc = sdi->priv;
+	wspec = NULL;
+	for (i = 0; i < ARRAY_SIZE(mhs5200a_waveforms); i++) {
+		if (mhs5200a_waveforms[i].waveform == wtype) {
+			wspec = &mhs5200a_waveforms[i];
+			break;
+		}
+	}
+	if (!wspec) {
+		sr_err("Could not determine current pattern type");
+		return SR_ERR;
+	}
+	
+	if (val > devc->max_frequency || val < wspec->freq_min || val > wspec->freq_max) {
+		sr_err("Invalid frequency %.2fHz for %s wave. Valid values are between %.2fHZ and %.2fHz",
+		       val, mhinstek_mhs_5200a_waveform_to_string(wtype),
+		       wspec->freq_min, wspec->freq_max);
+		return SR_ERR;
+	}
+	return mhs_cmd_ok(sdi->conn, ":s%df%d", ch, (int)(val * 100.0 + 0.5));
+}
+
+static int mhs_set_waveform(const struct sr_dev_inst *sdi, int ch, long val)
+{
+	return mhs_cmd_ok(sdi->conn, ":s%dw%d", ch, val);
+}
+
+static int mhs_set_waveform_string(const struct sr_dev_inst *sdi, int ch, const char *val)
+{
+	enum waveform_type wtype;
+	
+	wtype = mhinstek_mhs_5200a_string_to_waveform(val);
+	if (wtype == WAVEFORM_UNKNOWN) {
+		sr_err("Unknown waveform %s", val);
+		return SR_ERR;
+	}
+	return mhs_set_waveform(sdi, ch, wtype);
+}
+
+static int mhs_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	long attenuation;
+
+	if (val < 0.0 || val > 20.0) {
+		sr_err("Invalid amplitude %.2fV. Supported values are between 0V and 20V", val);
+		return SR_ERR;
+	}
+	if (mhs_get_attenuation(sdi, ch, &attenuation) < 0)
+		return SR_ERR;
+	
+	if (attenuation == ATTENUATION_MINUS_20DB) {
+		val *= 1000.0;
+	}  else {
+		val *= 100.0;
+	}
+	return mhs_cmd_ok(sdi->conn, ":s%da%d", ch, (int)(val + 0.5));
+}
+
+static int mhs_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	if (val < 0.0 || val > 100.0) {
+		sr_err("Invalid duty cycle %.2f%%. Supported values are between 0%% and 100%%", val);
+		return SR_ERR;
+	}
+	return mhs_cmd_ok(sdi->conn, ":s%dd%d", ch, (int)(val * 10.0 + 0.5));
+}
+
+static int mhs_set_offset(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	double amplitude;
+
+	if (mhs_get_amplitude(sdi, ch, &amplitude) < 0)
+		return SR_ERR;
+	// offset is set as a percentage and encoded with an offset of 120 for a range of -120 to 120
+	val = val / amplitude * 100.0;
+	if (val > 120.0 || val < -120.0) {
+		sr_err("Invalid offset %.2f%%. Supported values are between -120%% and 120%% of the amplitude value", val);
+		return SR_ERR;
+	}
+	return mhs_cmd_ok(sdi->conn, ":s%do%d", ch, (int)(val + 0.5 + 120.0));
+}
+
+static int mhs_set_phase(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	while (val >= 360.0)
+		val -= 360.0;
+	while (val < 0.0)
+		val += 360.0;
+			
+	return mhs_cmd_ok(sdi->conn, ":s%dp%d", ch, (int)(val + 0.5));
+}
+
+/*static int mhs_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
+{
+	return mhs_cmd_ok(sdi->conn, ":s%dy%d", ch, val);
+	}*/
+
+static int mhs_set_onoff(const struct sr_dev_inst *sdi, long val)
+{
+	return mhs_cmd_ok(sdi->conn, ":s1b%d", val ? 1 : 0);
+}
+
+
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
 {
 	struct dev_context *devc;
@@ -390,7 +496,6 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		serial_close(serial);
 		return NULL;
 	}
-	//XXXXXXXXXXXXXXXXX :r0c5225A5040000 */
 	strcpy(model, "MHS-");
 	strncpy(model + 4, buf + 4, 5);
 	model[9] = 0;
@@ -401,8 +506,8 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sdi->status = SR_ST_INACTIVE;
 	sdi->vendor = g_strdup("MHINSTEK");
 	sdi->model = g_strdup(model);
-	sdi->version = g_strdup("5.04"); //XXXXXXXXX firmware version
-	sdi->serial_num = g_strdup("1234"); //XXXXXXXXXX serial number
+	//sdi->version = g_strdup("5.04");
+	//sdi->serial_num = g_strdup("1234");
 	sdi->driver = &mhinstek_mhs_5200a_driver_info;
 
 	
@@ -479,23 +584,23 @@ static int config_get(uint32_t key, GVariant **data,
 			}
 			break;
 		case SR_CONF_OUTPUT_FREQUENCY:
-			if ((ret = mhs_get_frequency(sdi , ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs_get_frequency(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_AMPLITUDE:
-			if ((ret = mhs_get_amplitude(sdi , ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs_get_amplitude(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_OFFSET:
-			if ((ret = mhs_get_offset(sdi , ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs_get_offset(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_PHASE:
-			if ((ret = mhs_get_phase(sdi , ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs_get_phase(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		case SR_CONF_DUTY_CYCLE:
-			if ((ret = mhs_get_duty_cycle(sdi , ch->index + 1, &valf)) == SR_OK)
+			if ((ret = mhs_get_duty_cycle(sdi, ch->index + 1, &valf)) == SR_OK)
 				*data = g_variant_new_double(valf);
 			break;
 		default:
@@ -512,20 +617,63 @@ static int config_get(uint32_t key, GVariant **data,
 static int config_set(uint32_t key, GVariant *data,
 	const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
+	struct dev_context *devc;
+	struct sr_channel *ch;
+	const struct sr_key_info *kinfo;
 	int ret;
+	
+	if (!sdi || !data)
+		return SR_ERR_ARG;
 
-	fprintf(stderr, "%s: called\n", __func__);//XXXXXXXXXX
-	(void)sdi;
-	(void)data;
-	(void)cg;
-
+	devc = sdi->priv;
 	ret = SR_OK;
-	switch (key) {
-	/* TODO */
-	default:
-		ret = SR_ERR_NA;
-	}
+	kinfo = sr_key_info_get(SR_KEY_CONFIG, key);
 
+	if (!cg) {
+		switch (key) {
+		case SR_CONF_LIMIT_SAMPLES:
+		case SR_CONF_LIMIT_MSEC:
+			ret = sr_sw_limits_config_set(&devc->limits, key, data);
+			break;
+		default:
+			sr_dbg("%s: Unsupported key: %d (%s)", __func__,
+				(int)key, (kinfo ? kinfo->name : "unknown"));
+			ret = SR_ERR_NA;
+			break;
+		}
+	} else {
+		ch = cg->channels->data;
+
+		switch (key) {
+		case SR_CONF_ENABLED:
+			ret = mhs_set_onoff(sdi, g_variant_get_boolean(data));
+			break;
+		case SR_CONF_PATTERN_MODE:
+			ret = mhs_set_waveform_string(sdi, ch->index + 1, g_variant_get_string(data, NULL));
+			break;
+		case SR_CONF_OUTPUT_FREQUENCY:
+			ret = mhs_set_frequency(sdi, ch->index + 1, g_variant_get_double(data));
+			break;
+		case SR_CONF_AMPLITUDE:
+			ret = mhs_set_amplitude(sdi, ch->index + 1, g_variant_get_double(data));
+			break;
+		case SR_CONF_OFFSET:
+			ret = mhs_set_offset(sdi, ch->index + 1, g_variant_get_double(data));
+			break;
+		case SR_CONF_PHASE:
+			ret = mhs_set_phase(sdi, ch->index + 1, g_variant_get_double(data));
+			break;
+		case SR_CONF_DUTY_CYCLE:
+			ret = mhs_set_duty_cycle(sdi, ch->index + 1, g_variant_get_double(data));
+			break;
+		default:
+			sr_dbg("%s: Unsupported (cg) key: %d (%s)", __func__,
+			       (int)key, (kinfo ? kinfo->name : "unknown"));
+			ret = SR_ERR_NA;
+			break;
+		}
+	}
+		
 	return ret;
 }
 
@@ -590,7 +738,6 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	/* TODO: configure hardware, reset acquisition state, set up
 	 * callbacks and send header packet. */
 
-	fprintf(stderr, "%s: called\n", __func__);//XXXXXXXXXX
 	(void)sdi;
 
 	return SR_OK;
@@ -600,7 +747,6 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 {
 	/* TODO: stop acquisition. */
 
-	fprintf(stderr, "%s: called\n", __func__);//XXXXXXXXXX
 	(void)sdi;
 
 	return SR_OK;

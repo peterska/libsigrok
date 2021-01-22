@@ -27,19 +27,17 @@
 
 #define LOG_PREFIX "mhinstek-mhs-5200a"
 
-SR_PRIV int mhs_send_req(struct sr_serial_dev_inst *serial, const char *fmt, ...);
-
 #define PROTOCOL_LEN_MAX 32	/**< Max. line length for requests */
-
 #define SERIAL_READ_TIMEOUT_MS 50
 #define SERIAL_WRITE_TIMEOUT_MS 50
 
 // don't change the values, these are returned by the function generator
 enum attenuation_type {
-  ATTENUATION_MINUS_20DB = 0,
-  ATTENUATION_0DB        = 1,
+	ATTENUATION_MINUS_20DB = 0,
+	ATTENUATION_0DB        = 1,
 };
 
+// don't change the values, these are returned by the function generator
 enum waveform_type {
 	WAVEFORM_SINE = 0,
 	WAVEFORM_SQUARE,
@@ -47,6 +45,8 @@ enum waveform_type {
 	WAVEFORM_RISING_SAWTOOTH,
 	WAVEFORM_FALLING_SAWTOOTH,
 	WAVEFORM_ARBITRARY_0 = 100,
+
+	WAVEFORM_UNKNOWN = 1000,
 };
 
 enum waveform_options {
@@ -74,13 +74,14 @@ struct channel_spec {
 struct dev_context {
 	struct sr_sw_limits limits;
 	size_t buflen;
-	double max_frequency;
+	double max_frequency; // for sine wave, all others are 6MHz
 	uint8_t buf[PROTOCOL_LEN_MAX];
 
 };
 
 SR_PRIV int mhinstek_mhs_5200a_receive_data(int fd, int revents, void *cb_data);
 SR_PRIV const char *mhinstek_mhs_5200a_waveform_to_string(enum waveform_type type);
+SR_PRIV enum waveform_type mhinstek_mhs_5200a_string_to_waveform(const char *type);
 
 #endif
 
