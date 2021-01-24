@@ -95,11 +95,32 @@ struct dev_context {
 
 };
 
+SR_PRIV int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...);
+SR_PRIV int mhs5200a_get_frequency_limits(enum waveform_type wtype, double *freq_min, double *freq_max);
+
 SR_PRIV int mhs5200a_receive_data(int fd, int revents, void *cb_data);
 SR_PRIV const char *mhs5200a_waveform_to_string(enum waveform_type type);
 SR_PRIV enum waveform_type mhs5200a_string_to_waveform(const char *type);
 
-SR_PRIV  int mhs5200a_set_counter_function(const struct sr_dev_inst *sdi, enum counter_function val);
+SR_PRIV int mhs5200a_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val);
+SR_PRIV int mhs5200a_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val);
+SR_PRIV int mhs5200a_get_onoff(const struct sr_dev_inst *sdi, long *val);
+SR_PRIV int mhs5200a_get_frequency(const struct sr_dev_inst *sdi, int ch, double *val);
+SR_PRIV int mhs5200a_get_amplitude(const struct sr_dev_inst *sdi, int ch, double *val);
+SR_PRIV int mhs5200a_get_duty_cycle(const struct sr_dev_inst *sdi, int ch, double *val);
+SR_PRIV int mhs5200a_get_offset(const struct sr_dev_inst *sdi, int ch, double *val);
+SR_PRIV int mhs5200a_get_phase(const struct sr_dev_inst *sdi, int ch, double *val);
+SR_PRIV int mhs5200a_set_frequency(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_waveform(const struct sr_dev_inst *sdi, int ch, long val);
+SR_PRIV int mhs5200a_set_waveform_string(const struct sr_dev_inst *sdi, int ch, const char *val);
+SR_PRIV int mhs5200a_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_offset(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_phase(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val);
+
+SR_PRIV int mhs5200a_set_counter_onoff(const struct sr_dev_inst *sdi, long val);
+SR_PRIV int mhs5200a_set_counter_function(const struct sr_dev_inst *sdi, enum counter_function val);
 SR_PRIV int mhs5200a_set_counter_gate_time(const struct sr_dev_inst *sdi, enum gate_time val);
 SR_PRIV int mhs5200a_get_counter_value(const struct sr_dev_inst *sdi, double *val);
 SR_PRIV int mhs5200a_get_counter_frequency(const struct sr_dev_inst *sdi, double *val);

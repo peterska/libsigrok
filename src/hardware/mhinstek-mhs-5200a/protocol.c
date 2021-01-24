@@ -61,6 +61,448 @@ SR_PRIV enum waveform_type mhs5200a_string_to_waveform(const char *wtype)
 	}
 }
 
+/**
+ * Read message into buf until "OK" received.
+ *
+ * @retval SR_OK Msg received; buf and buflen contain result, if any except OK.
+ * @retval SR_ERR Error, including timeout.
+*/
+static int mhs5200a_read_reply(struct sr_serial_dev_inst *serial, char **buf, int *buflen)
+{
+	int retc;
+	
+	*buf[0] = '\0';
+
+	retc = serial_read_blocking(serial, *buf, *buflen, SERIAL_READ_TIMEOUT_MS);
+	if (retc <= 0)
+		return SR_ERR;
+	while ( ((*buf)[retc - 1] == '\n') || ((*buf)[retc - 1] == '\r') ) {
+		(*buf)[retc - 1] = '\0';
+		--retc;
+	}
+	*buflen = retc;
+	if (!strcmp(*buf, "ok")) { /* We got an OK! */
+		*buf[0] = '\0';
+		*buflen = 0;
+		return SR_OK;
+	}
+	return SR_OK;
+}
+
+/** Send command to device with va_list. */
+static int mhs5200a_send_va(struct sr_serial_dev_inst *serial, const char *fmt, va_list args)
+{
+	int retc;
+	char auxfmt[PROTOCOL_LEN_MAX];
+	char buf[PROTOCOL_LEN_MAX];
+
+	snprintf(auxfmt, sizeof(auxfmt), "%s\n", fmt); // all command require a \n at the end
+	vsnprintf(buf, sizeof(buf), auxfmt, args);
+
+	retc = serial_write_blocking(serial, buf, strlen(buf), SERIAL_WRITE_TIMEOUT_MS);
+	if (retc < 0)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+/** Send command and consume simple OK reply. */
+static int mhs5200a_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, ...)
+{
+	int retc;
+	va_list args;
+	char buf[PROTOCOL_LEN_MAX];
+	char *bufptr;
+	int buflen;
+
+	/* Send command */
+	va_start(args, fmt);
+	retc = mhs5200a_send_va(serial, fmt, args);
+	va_end(args);
+
+	if (retc != SR_OK)
+		return SR_ERR;
+
+	/* Read reply */
+	buf[0] = '\0';
+	bufptr = buf;
+	buflen = sizeof(buf);
+	retc = mhs5200a_read_reply(serial, &bufptr, &buflen);
+	if ((retc == SR_OK) && (buflen == 0))
+		return SR_OK;
+
+	return SR_ERR;
+}
+
+/**
+ * Send command and read reply string.
+ * @param reply Pointer to buffer of size PROTOCOL_LEN_MAX. Will be NUL-terminated.
+ */
+SR_PRIV int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...)
+{
+	int retc;
+	va_list args;
+	char buf[PROTOCOL_LEN_MAX];
+	char *bufptr;
+	int buflen;
+
+	reply[0] = '\0';
+
+	/* Send command */
+	va_start(args, fmt);
+	retc = mhs5200a_send_va(serial, fmt, args);
+	va_end(args);
+
+	if (retc != SR_OK)
+		return SR_ERR;
+
+	/* Read reply */
+	buf[0] = '\0';
+	bufptr = buf;
+	buflen = sizeof(buf);
+	retc = mhs5200a_read_reply(serial, &bufptr, &buflen);
+	if ((retc == SR_OK) && (buflen > 0)) {
+		strcpy(reply, buf);
+		return SR_OK;
+	}
+
+	return SR_ERR;
+}
+
+SR_PRIV int mhs5200a_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dw", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atol(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dy", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atol(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_onoff(const struct sr_dev_inst *sdi, long *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r1b");
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atol(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_frequency(const struct sr_dev_inst *sdi, int ch, double *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%df", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	*val /= 100.0;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_amplitude(const struct sr_dev_inst *sdi, int ch, double *val)
+{
+	int retc;
+	long attenuation;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_get_attenuation(sdi, ch, &attenuation);
+	if (retc < 0)
+		return SR_ERR;
+	
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%da", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	*val /= 100.0;
+	if (attenuation == ATTENUATION_MINUS_20DB) {
+		*val /= 10.0;
+	}
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_duty_cycle(const struct sr_dev_inst *sdi, int ch, double *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dd", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	*val /= 10.0;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_offset(const struct sr_dev_inst *sdi, int ch, double *val)
+{
+	int retc;
+	double amplitude;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_get_amplitude(sdi, ch, &amplitude);
+	if (retc < 0)
+		return SR_ERR;
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%do", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	*val -= 120.0; // offset is returned as a percentage of amplitude
+	*val = amplitude * *val / 100.0;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_phase(const struct sr_dev_inst *sdi, int ch, double *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r%dp", ch);
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_set_frequency(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	struct dev_context *devc;
+	long wtype;
+	double freq_min;
+	double freq_max;
+	
+	if (mhs5200a_get_waveform(sdi, ch, &wtype) < 0) {
+		return SR_ERR;
+	}
+	devc = sdi->priv;
+	if (mhs5200a_get_frequency_limits(wtype, &freq_min, &freq_max) < 0)
+		return SR_ERR;
+	
+	if (val > devc->max_frequency || val < freq_min || val > freq_max) {
+		sr_err("Invalid frequency %.2fHz for %s wave. Valid values are between %.2fHZ and %.2fHz",
+		       val, mhs5200a_waveform_to_string(wtype),
+		       freq_min, freq_max);
+		return SR_ERR;
+	}
+	return mhs5200a_cmd_ok(sdi->conn, ":s%df%d", ch, (int)(val * 100.0 + 0.5));
+}
+
+SR_PRIV int mhs5200a_set_waveform(const struct sr_dev_inst *sdi, int ch, long val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dw%d", ch, val);
+}
+
+SR_PRIV int mhs5200a_set_waveform_string(const struct sr_dev_inst *sdi, int ch, const char *val)
+{
+	enum waveform_type wtype;
+	
+	wtype = mhs5200a_string_to_waveform(val);
+	if (wtype == WAVEFORM_UNKNOWN) {
+		sr_err("Unknown waveform %s", val);
+		return SR_ERR;
+	}
+	return mhs5200a_set_waveform(sdi, ch, wtype);
+}
+
+SR_PRIV int mhs5200a_set_amplitude(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	long attenuation;
+
+	if (val < 0.0 || val > 20.0) {
+		sr_err("Invalid amplitude %.2fV. Supported values are between 0V and 20V", val);
+		return SR_ERR;
+	}
+	if (mhs5200a_get_attenuation(sdi, ch, &attenuation) < 0)
+		return SR_ERR;
+	
+	if (attenuation == ATTENUATION_MINUS_20DB) {
+		val *= 1000.0;
+	}  else {
+		val *= 100.0;
+	}
+	return mhs5200a_cmd_ok(sdi->conn, ":s%da%d", ch, (int)(val + 0.5));
+}
+
+SR_PRIV int mhs5200a_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	if (val < 0.0 || val > 100.0) {
+		sr_err("Invalid duty cycle %.2f%%. Supported values are between 0%% and 100%%", val);
+		return SR_ERR;
+	}
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dd%d", ch, (int)(val * 10.0 + 0.5));
+}
+
+SR_PRIV int mhs5200a_set_offset(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	double amplitude;
+
+	if (mhs5200a_get_amplitude(sdi, ch, &amplitude) < 0)
+		return SR_ERR;
+	// offset is set as a percentage and encoded with an offset of 120 for a range of -120 to 120
+	val = val / amplitude * 100.0;
+	if (val > 120.0 || val < -120.0) {
+		sr_err("Invalid offset %.2f%%. Supported values are between -120%% and 120%% of the amplitude value", val);
+		return SR_ERR;
+	}
+	return mhs5200a_cmd_ok(sdi->conn, ":s%do%d", ch, (int)(val + 0.5 + 120.0));
+}
+
+SR_PRIV int mhs5200a_set_phase(const struct sr_dev_inst *sdi, int ch, double val)
+{
+	while (val >= 360.0)
+		val -= 360.0;
+	while (val < 0.0)
+		val += 360.0;
+			
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dp%d", ch, (int)(val + 0.5));
+}
+
+/*SR_PRIV int mhs5200a_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dy%d", ch, val);
+	}*/
+
+SR_PRIV int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s1b%d", val ? 1 : 0);
+}
+
+SR_PRIV int mhs5200a_set_counter_onoff(const struct sr_dev_inst *sdi, long val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s6b%d", val);
+}
+
+SR_PRIV  int mhs5200a_set_counter_function(const struct sr_dev_inst *sdi, enum counter_function val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s%dm", val);
+}
+
+SR_PRIV int mhs5200a_set_counter_gate_time(const struct sr_dev_inst *sdi, enum gate_time val)
+{
+	return mhs5200a_cmd_ok(sdi->conn, ":s1g%d", val);
+}
+
+SR_PRIV int mhs5200a_get_counter_value(const struct sr_dev_inst *sdi, double *val)
+{
+	int retc;
+	char buf[PROTOCOL_LEN_MAX];
+
+	retc = mhs5200a_cmd_reply(buf, sdi->conn, ":r0e");
+	if (retc < 0)
+		return SR_ERR;
+
+	if (strlen(buf) < 4)
+		return SR_ERR;
+
+	if (sr_atod(buf + 4, val) != SR_OK)
+		return SR_ERR;
+
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_frequency(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val /= 10.0;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_period(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val *= 1.0e-9;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_pulse_width(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val *= 1.0e-9;
+	return SR_OK;
+}
+
+SR_PRIV int mhs5200a_get_counter_duty_cycle(const struct sr_dev_inst *sdi, double *val)
+{
+	if (mhs5200a_get_counter_value(sdi, val) < 0)
+		return SR_ERR;
+
+	*val /= 10.0;
+	return SR_OK;
+}
+
 static void mhs5200a_send_channel_value(const struct sr_dev_inst *sdi,
 					struct sr_channel *ch, double value, enum sr_mq mq,
 					enum sr_unit unit, int digits)
