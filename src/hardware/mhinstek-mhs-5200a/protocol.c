@@ -33,8 +33,6 @@ SR_PRIV const char *mhs5200a_waveform_to_string(enum waveform_type wtype)
 		return "rising sawtooth";
 	case WAVEFORM_FALLING_SAWTOOTH:
 		return "falling sawtooth";
-	case WAVEFORM_ARBITRARY_0:
-		return "arbitrary waveform 0";
 	case WAVEFORM_UNKNOWN:
 		return "unknown";
 	}
@@ -138,7 +136,7 @@ static int mhs5200a_cmd_ok(struct sr_serial_dev_inst *serial, const char *fmt, .
  * Send command and read reply string.
  * @param reply Pointer to buffer of size PROTOCOL_LEN_MAX. Will be NUL-terminated.
  */
-SR_PRIV int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...)
+static int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...)
 {
 	int retc;
 	va_list args;
@@ -167,6 +165,26 @@ SR_PRIV int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, c
 	}
 
 	return SR_ERR;
+}
+
+SR_PRIV int mhs5200a_get_model(struct sr_serial_dev_inst *serial, char *model, int modelsize)
+{
+	char buf[PROTOCOL_LEN_MAX];
+
+	if (modelsize < 10) {
+		return SR_ERR;
+	}
+	/* Query and verify model string. */
+	if ( (mhs5200a_cmd_reply(buf, serial, ":r0c") != SR_OK) || strlen(buf) < 10) {
+		return SR_ERR;
+	}
+	if (strncmp(buf, ":r0c52", 6) != 0) {
+		return SR_ERR;
+	}
+	memcpy(model, "MHS-", 4);
+	memcpy(model + 4, buf + 4, 5);
+	model[9] = 0;
+	return SR_OK;
 }
 
 SR_PRIV int mhs5200a_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val)
@@ -342,7 +360,7 @@ SR_PRIV int mhs5200a_set_frequency(const struct sr_dev_inst *sdi, int ch, double
 		return SR_ERR;
 	}
 	devc = sdi->priv;
-	if (mhs5200a_get_frequency_limits(wtype, &freq_min, &freq_max) < 0)
+	if (mhs5200a_frequency_limits(wtype, &freq_min, &freq_max) < 0)
 		return SR_ERR;
 	
 	if (val > devc->max_frequency || val < freq_min || val > freq_max) {
@@ -424,10 +442,10 @@ SR_PRIV int mhs5200a_set_phase(const struct sr_dev_inst *sdi, int ch, double val
 	return mhs5200a_cmd_ok(sdi->conn, ":s%dp%d", ch, (int)(val + 0.5));
 }
 
-/*SR_PRIV int mhs5200a_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
+SR_PRIV int mhs5200a_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val)
 {
 	return mhs5200a_cmd_ok(sdi->conn, ":s%dy%d", ch, val);
-	}*/
+}
 
 SR_PRIV int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val)
 {

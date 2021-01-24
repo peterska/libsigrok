@@ -44,8 +44,6 @@ enum waveform_type {
 	WAVEFORM_TRIANGLE,
 	WAVEFORM_RISING_SAWTOOTH,
 	WAVEFORM_FALLING_SAWTOOTH,
-	WAVEFORM_ARBITRARY_0 = 100,
-
 	WAVEFORM_UNKNOWN = 1000,
 };
 
@@ -95,13 +93,12 @@ struct dev_context {
 
 };
 
-SR_PRIV int mhs5200a_cmd_reply(char *reply, struct sr_serial_dev_inst *serial, const char *fmt, ...);
-SR_PRIV int mhs5200a_get_frequency_limits(enum waveform_type wtype, double *freq_min, double *freq_max);
 
 SR_PRIV int mhs5200a_receive_data(int fd, int revents, void *cb_data);
 SR_PRIV const char *mhs5200a_waveform_to_string(enum waveform_type type);
 SR_PRIV enum waveform_type mhs5200a_string_to_waveform(const char *type);
-
+SR_PRIV int mhs5200a_frequency_limits(enum waveform_type wtype, double *freq_min, double *freq_max);
+SR_PRIV int mhs5200a_get_model(struct sr_serial_dev_inst *serial, char *model, int modelsize);
 SR_PRIV int mhs5200a_get_waveform(const struct sr_dev_inst *sdi, int ch, long *val);
 SR_PRIV int mhs5200a_get_attenuation(const struct sr_dev_inst *sdi, int ch, long *val);
 SR_PRIV int mhs5200a_get_onoff(const struct sr_dev_inst *sdi, long *val);
@@ -117,8 +114,8 @@ SR_PRIV int mhs5200a_set_amplitude(const struct sr_dev_inst *sdi, int ch, double
 SR_PRIV int mhs5200a_set_duty_cycle(const struct sr_dev_inst *sdi, int ch, double val);
 SR_PRIV int mhs5200a_set_offset(const struct sr_dev_inst *sdi, int ch, double val);
 SR_PRIV int mhs5200a_set_phase(const struct sr_dev_inst *sdi, int ch, double val);
+SR_PRIV int mhs5200a_set_attenuation(const struct sr_dev_inst *sdi, int ch, long val);
 SR_PRIV int mhs5200a_set_onoff(const struct sr_dev_inst *sdi, long val);
-
 SR_PRIV int mhs5200a_set_counter_onoff(const struct sr_dev_inst *sdi, long val);
 SR_PRIV int mhs5200a_set_counter_function(const struct sr_dev_inst *sdi, enum counter_function val);
 SR_PRIV int mhs5200a_set_counter_gate_time(const struct sr_dev_inst *sdi, enum gate_time val);

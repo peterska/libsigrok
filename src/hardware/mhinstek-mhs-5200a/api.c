@@ -65,7 +65,7 @@ static const struct channel_spec mhs5200a_channels[] = {
 
 static const double phase_min_max_step[] = { 0.0, 360.0, 1.0 };
 
-SR_PRIV int mhs5200a_get_frequency_limits(enum waveform_type wtype, double *freq_min, double *freq_max)
+SR_PRIV int mhs5200a_frequency_limits(enum waveform_type wtype, double *freq_min, double *freq_max)
 {
 	const struct waveform_spec *wspec;
 	unsigned int i;
@@ -98,7 +98,6 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	GSList *l, *devices;
 	unsigned int i, ch_idx;
 	char buf[PROTOCOL_LEN_MAX];
-	char model[PROTOCOL_LEN_MAX];
 
 	devices = NULL;
 	conn = NULL;
@@ -124,25 +123,18 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 	sr_info("Probing serial port %s.", conn);
 
-	/* Query and verify model string. */
-	if ( (mhs5200a_cmd_reply(buf, serial, ":r0c") != SR_OK) || strlen(buf) < 10) {
-		serial_close(serial);
-		return NULL;
-	}
-	if (strncmp(buf, ":r0c52", 6) != 0) {
-		serial_close(serial);
-		return NULL;
-	}
-	strcpy(model, "MHS-");
-	strncpy(model + 4, buf + 4, 5);
-	model[9] = 0;
 	
+	/* Query and verify model string. */
+	if (mhs5200a_get_model(serial, buf, sizeof(buf)) < 0) {
+		serial_close(serial);
+		return NULL;
+	}
 	sr_info("Found device on port %s.", conn);
 
 	sdi = g_malloc0(sizeof(*sdi));
 	sdi->status = SR_ST_INACTIVE;
 	sdi->vendor = g_strdup("MHINSTEK");
-	sdi->model = g_strdup(model);
+	sdi->model = g_strdup(buf);
 	//sdi->version = g_strdup("5.04");
 	//sdi->serial_num = g_strdup("1234");
 	sdi->driver = &mhinstek_mhs5200a_driver_info;
@@ -150,7 +142,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	
 	devc = g_malloc0(sizeof(*devc));
 	sr_sw_limits_init(&devc->limits);
-	devc->max_frequency = (model[6] - '0') * 10 + model[7] - '0';
+	devc->max_frequency = (buf[6] - '0') * 10 + buf[7] - '0';
 	devc->max_frequency *= 1.0e06;
 	sdi->inst_type = SR_INST_SERIAL;
 	sdi->conn = serial;
@@ -170,10 +162,10 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	}
 	
 	/* Create channels for the frequency counter output. */
-	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "FREQ1");
-	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "PERIOD1");
-	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "DUTY1");
-	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "WIDTH1");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "FREQ");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "PERIOD");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "DUTY");
+	ch = sr_channel_new(sdi, ch_idx++, SR_CHANNEL_ANALOG, TRUE, "WIDTH");
 
 	/* Add found device to result set. */
 	devices = g_slist_append(devices, sdi);
